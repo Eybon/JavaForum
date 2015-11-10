@@ -1,0 +1,7 @@
+/log
+client/target
+client/log
+core/target
+core/log
+server/target
+server/log
