@@ -45,6 +45,8 @@ public class Launcher extends Application
 
     private TextField m_login;
     private PasswordField m_password;
+    private TextField m_url;
+    private TextField m_port;
     private Stage m_primaryStage;
     private Text m_textError;
 
@@ -84,16 +86,40 @@ public class Launcher extends Application
             public void handle(ActionEvent event) {
                 launchForum();
             }
-        });         
+        });
+
+        Label server = new Label("Server:");
+        grid.add(server, 0, 3);
+
+        m_url = new TextField();
+        grid.add(m_url, 1, 3);
+        m_url.setOnAction(new EventHandler<ActionEvent>() {
+            @Override
+            public void handle(ActionEvent event) {
+                launchForum();
+            }
+        });
+
+        Label port = new Label("Port:");
+        grid.add(port, 0, 4);
+
+        m_port = new TextField();
+        grid.add(m_port, 1, 4);
+        m_port.setOnAction(new EventHandler<ActionEvent>() {
+            @Override
+            public void handle(ActionEvent event) {
+                launchForum();
+            }
+        });
 
         Button btn = new Button("Sign in");
         HBox hbBtn = new HBox(10);
         hbBtn.setAlignment(Pos.BOTTOM_RIGHT);
         hbBtn.getChildren().add(btn);
-        grid.add(hbBtn, 1, 4);
+        grid.add(hbBtn, 1, 5);
 
         m_textError = new Text();
-        grid.add(m_textError, 0, 6);
+        grid.add(m_textError, 0, 7);
         grid.setColumnSpan(m_textError, 2);
         grid.setHalignment(m_textError, RIGHT);
 
@@ -113,7 +139,7 @@ public class Launcher extends Application
 
     public void launchForum(){
         try {
-            ClientForum c = new ClientForum(m_primaryStage);
+            ClientForum c = new ClientForum(m_primaryStage, m_url.getText(), m_port.getText());
 
             boolean test = c.tryLogin(m_login.getText(),m_password.getText());
             if(test)

@@ -160,7 +160,7 @@ public class Window extends Application {
 		}
 	}
 
-	public void updateListOfChannel(Map<Integer, ISujetDiscussion> topics)
+	public void updateListOfChannel(Map<String, ISujetDiscussion> topics)
 	{
 		int nb_topic = topics.size();
 		String[] list = new String[nb_topic];
@@ -168,18 +168,23 @@ public class Window extends Application {
         if(nb_topic > 0)
         {
 			System.out.println("nombre de section : "+nb_topic);
-            for(int i = 1; i <= nb_topic; i++)
-            {  
-            	try{
-            		list[i-1] = topics.get(i).getTitle();
-				}catch (RemoteException e) {
-				    e.printStackTrace();
-				}            	
+            Set<String> keys = topics.keySet();
+
+            int i = 0;
+            for (String key : keys) {
+                try {
+                    list[i++] = topics.get(key).getTitle();
+                } catch (RemoteException e) {
+                    e.printStackTrace();
+                }
             }
         }
 
-        m_listOfChannel.setItems(FXCollections.observableArrayList(list));
+        try {
+            m_listOfChannel.setItems(FXCollections.observableArrayList(list));
+        } catch (Exception e) {
 
+        }
 	}
 
 	public Channel addNewChannel(String name){
