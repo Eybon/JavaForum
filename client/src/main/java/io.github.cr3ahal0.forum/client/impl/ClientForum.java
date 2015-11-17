@@ -23,6 +23,7 @@ import java.rmi.RemoteException;
 import java.util.*;
 import java.util.List;
 
+import io.github.cr3ahal0.forum.server.ServeurResponse;
 import javafx.stage.Stage;
 import javafx.application.Platform;
 
@@ -43,15 +44,15 @@ public class ClientForum extends UnicastRemoteObject implements IClientForum, Ob
 
     private Stage m_primaryStage;
 
-    public ClientForum(Stage primaryStage) throws RemoteException {
+    public ClientForum(Stage primaryStage, String serverUrl, String serverPort) throws RemoteException {
 
         try {
 
             m_primaryStage = primaryStage;
 
-            auth = (IServeurForum) Naming.lookup("//127.0.0.1:8090/auth");
+            auth = (IServeurForum) Naming.lookup(serverUrl +":"+ serverPort +"/auth");
 
-            server = (IServeurForum) Naming.lookup("//127.0.0.1:8090/list");
+            server = (IServeurForum) Naming.lookup(serverUrl +":"+ serverPort +"/list");
 
             topics = new HashMap<Channel, ISujetDiscussion>();
             displays = new HashMap<ISujetDiscussion, IAfficheurClient>();
@@ -89,36 +90,34 @@ public class ClientForum extends UnicastRemoteObject implements IClientForum, Ob
 
     //operation à 1 pour ajouter et à 0 pour supprimer
     public void operationOnChannelWithName(String nameOfChannel, boolean operation){
-        Map<Integer, ISujetDiscussion>  top = null;
+        Map<String, ISujetDiscussion>  top = null;
         try{
             top = server.list();
         }catch(Exception e){ }
         int nb_topic = top.size();
 
-        for(int i = 1; i <= nb_topic; i++)
-        {  
-            try
-            {
-                //System.out.println("DEBUG :: topic num"+i+"-"+top.get(i).getTitle()+"-");
-                if(nameOfChannel.equals( top.get(i).getTitle()) ){
+        Set<String> keys = top.keySet();
+        for (String key : keys) {
+            try {
+                if(nameOfChannel.equals( top.get(key).getTitle()) ){
                     if(operation){
-                        joinChannel("/join "+i);
+                        joinChannel("/join "+ key);
                     }
                     else{
-                        exitChannel("/exit "+i);
+                        exitChannel("/exit "+ key);
                     }
                 }
-            }
-            catch (RemoteException e) {
+            } catch (RemoteException e) {
                 e.printStackTrace();
             }
         }
+
     }
 
     public void joinChannel(String command)
     {
-        try {        
-            Integer id = Integer.valueOf(command.replace("/join ", ""));
+        try {
+            String id = command.replace("/join ", "");
             ISujetDiscussion destination = server.join(id);
             if (destination == null) {
                 System.out.println("Error : this chanel does not exist !");
@@ -165,9 +164,9 @@ public class ClientForum extends UnicastRemoteObject implements IClientForum, Ob
                 System.out.println("Error : this chanel exist !");
             } else {
 
-                boolean test = server.add(id,login);
+                ServeurResponse test = server.add(id,login);
 
-                if (!test) {
+                if (!test.equals(ServeurResponse.TOPIC_UNKNOWN)) {
                     System.out.println("Error : failed to add ");
                 } else {
                     System.out.println("New Sujet Add");
@@ -182,7 +181,7 @@ public class ClientForum extends UnicastRemoteObject implements IClientForum, Ob
     //Attention rajouter test sur l'existence du chanel !!!   
     public void deleteChannel(String command){
         try{
-            int id = Integer.valueOf(command.replace("/delete ", ""));
+            String id = command.replace("/delete ", "");
             //ISujetDiscussion destination = server.join(id);
             ISujetDiscussion destination = null;
             if(destination != null){
@@ -215,6 +214,7 @@ public class ClientForum extends UnicastRemoteObject implements IClientForum, Ob
                 //On veut toujours laisser ouvert le sujet de discussion principal -> impossible de fermer l'element 1
 				if ((list.size() > 0)&&(Integer.valueOf(list.get(0))!=1)) {
 					ISujetDiscussion destination = server.join(Integer.valueOf(list.get(0)));
+
 					if (destination == null) {
 						return;
 					}
@@ -339,7 +339,7 @@ public class ClientForum extends UnicastRemoteObject implements IClientForum, Ob
         }
     }
 
-    public void updateTopics(Map<Integer, ISujetDiscussion> topics) throws RemoteException {
+    public void updateTopics(Map<String, ISujetDiscussion> topics) throws RemoteException {
         System.out.println("Server has notified some changes from topics ! Updating...");
         this.gui.updateListOfChannel(topics);
     }

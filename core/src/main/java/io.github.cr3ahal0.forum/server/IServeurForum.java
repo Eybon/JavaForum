@@ -12,18 +12,28 @@ import java.util.Map;
  */
 public interface IServeurForum extends Remote {
 
+    public String getUrl() throws RemoteException;
+
+    public String getPort() throws RemoteException;
+
     public boolean auth(IClientForum token, String username, String password) throws RemoteException;
 
     public void disconnect(String username) throws RemoteException;
 
-    public Map<Integer, ISujetDiscussion> list() throws RemoteException;
+    public Map<String, ISujetDiscussion> list() throws RemoteException;
 
-    public ISujetDiscussion join(Integer id) throws RemoteException;
+    public ISujetDiscussion join(String id) throws RemoteException;
 
     public ICommandFeedback handleCommand(String cmd, String user, ISujetDiscussion topic) throws RemoteException;
 
-    public boolean add(String title, String owner) throws RemoteException;
+    public ServeurResponse add(String title, String owner) throws RemoteException;
 
-	public boolean delete(Integer topic, String owner) throws RemoteException;
+	public boolean delete(String topic, String owner) throws RemoteException;
+
+    public void addServer(String url) throws RemoteException;
+
+    public void acknowledgeServer(IServeurForum server) throws RemoteException;
+
+    public boolean broadcast(String title, String owner) throws RemoteException;
 
 }

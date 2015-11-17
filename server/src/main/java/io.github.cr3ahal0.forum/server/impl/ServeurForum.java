@@ -1,32 +1,31 @@
 package io.github.cr3ahal0.forum.server.impl;
 
-import io.github.cr3ahal0.forum.client.IClientForum;
 import io.github.cr3ahal0.forum.client.IAfficheurClient;
-import io.github.cr3ahal0.forum.client.impl.SessionToken;
+import io.github.cr3ahal0.forum.client.IClientForum;
 import io.github.cr3ahal0.forum.server.ICommandFeedback;
 import io.github.cr3ahal0.forum.server.IServeurForum;
 import io.github.cr3ahal0.forum.server.ISujetDiscussion;
+import io.github.cr3ahal0.forum.server.ServeurResponse;
 import io.github.cr3ahal0.forum.server.impl.commands.DiceMessage;
 import io.github.cr3ahal0.forum.server.impl.commands.ThirdPersonMessage;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.ektorp.CouchDbConnector;
-import org.ektorp.CouchDbInstance;
-import org.ektorp.http.HttpClient;
-import org.ektorp.http.StdHttpClient;
-import org.ektorp.impl.StdCouchDbConnector;
-import org.ektorp.impl.StdCouchDbInstance;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.UnsupportedEncodingException;
 import java.net.MalformedURLException;
+import java.nio.charset.StandardCharsets;
 import java.rmi.AlreadyBoundException;
 import java.rmi.Naming;
 import java.rmi.NotBoundException;
 import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.server.UnicastRemoteObject;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class ServeurForum
         extends UnicastRemoteObject
@@ -36,7 +35,7 @@ public class ServeurForum
 
     private static final Logger logger = LogManager.getLogger(ServeurForum.class);
 
-    private Map<Integer, ISujetDiscussion> salons;
+    private ConcurrentHashMap<String, ISujetDiscussion> salons;
 
     private boolean up = false;
 
@@ -44,28 +43,49 @@ public class ServeurForum
         return up;
     }
 
-    protected ServeurForum() throws RemoteException {
+    private Set<IServeurForum> knownServers;
+
+    private String url;
+
+    private Integer port;
+
+    protected ServeurForum(String url, Integer port) throws RemoteException {
+
+        this.url = url;
+        this.port = port;
 
         listeners = new ArrayList<IClientForum>();
-        salons = new HashMap<Integer, ISujetDiscussion>();
+        salons = new ConcurrentHashMap<String, ISujetDiscussion>();
+
+        knownServers = new HashSet<IServeurForum>();
 
         int i = 1;
 
-        salons.put(i++, new SujetDiscussion("GlobalChat"));
-        salons.put(i++, new SujetDiscussion("Middleware"));
-        salons.put(i++, new SujetDiscussion("IHM"));
-        salons.put(i++, new SujetDiscussion("Architecture Logicielle"));
-        salons.put(i++, new SujetDiscussion("Architectures Distribuées"));
-        salons.put(i++, new SujetDiscussion("MDE"));
-        salons.put(i++, new SujetDiscussion("Web Semantique"));
-        salons.put(i++, new SujetDiscussion("Cloud Computing"));
-        salons.put(i++, new SujetDiscussion("Conference"));
-        salons.put(i++, new SujetDiscussion("Meta-Meta-Meta-Model"));
-        salons.put(i++, new SujetDiscussion("Base de Données"));
-        salons.put(i++, new SujetDiscussion("HTml 7"));
+        salons.put(String.valueOf(i++), new SujetDiscussion("GlobalChat"));
+        salons.put(String.valueOf(i++), new SujetDiscussion("Middleware"));
+        salons.put(String.valueOf(i++), new SujetDiscussion("IHM"));
+        salons.put(String.valueOf(i++), new SujetDiscussion("Architecture Logicielle"));
+        salons.put(String.valueOf(i++), new SujetDiscussion("Architectures Distribuées"));
+        salons.put(String.valueOf(i++), new SujetDiscussion("MDE"));
+        salons.put(String.valueOf(i++), new SujetDiscussion("Web Semantique"));
+        salons.put(String.valueOf(i++), new SujetDiscussion("Cloud Computing"));
+        salons.put(String.valueOf(i++), new SujetDiscussion("Conference"));
+        salons.put(String.valueOf(i++), new SujetDiscussion("Meta-Meta-Meta-Model"));
+        salons.put(String.valueOf(i++), new SujetDiscussion("Base de Données"));
+        salons.put(String.valueOf(i++), new SujetDiscussion("HTml 7"));
 
 
         up = true;
+    }
+
+    @Override
+    public String getUrl() throws RemoteException {
+        return url;
+    }
+
+    @Override
+    public String getPort() throws RemoteException {
+        return port.toString();
     }
 
     public boolean auth(IClientForum token, String username, String password) throws RemoteException {
@@ -84,11 +104,11 @@ public class ServeurForum
         System.out.println("[Logout] " + username + " has disconnected");
     }
 
-    public Map<Integer, ISujetDiscussion> list() throws RemoteException {
+    public Map<String, ISujetDiscussion> list() throws RemoteException {
         return salons;
     }
 
-    public ISujetDiscussion join(Integer id) throws RemoteException {
+    public ISujetDiscussion join(String id) throws RemoteException {
         ISujetDiscussion token = salons.get(id);
         if (token != null) {
 
@@ -102,17 +122,27 @@ public class ServeurForum
         boolean booted = false;
 		ServeurForum serveur = null;
 
+        String url = (args.length > 0) ? args[0] : "//127.0.0.1";
+        Integer port = (args.length > 1) ? Integer.valueOf(args[1]) : 8090;
+
+        String urlPort = url + ":" + port;
+        System.out.println("Trying to start server for url "+ url +":"+ port);
+
         while (!booted) {
             try {
-                serveur = new ServeurForum();
+                serveur = new ServeurForum(url, port);
 
                 System.out.println("RMI initializing...");
-                LocateRegistry.createRegistry(8090);
+                LocateRegistry.createRegistry(port);
 
-                Naming.bind("//127.0.0.1:8090/auth", serveur);
-                Naming.bind("//127.0.0.1:8090/list", serveur);
-                Naming.bind("//127.0.0.1:8090/join", serveur);
+                Naming.bind(urlPort + "/auth", serveur);
+                Naming.bind(urlPort + "/list", serveur);
+                Naming.bind(urlPort + "/join", serveur);
+
+                Naming.bind(urlPort + "/endpoint", serveur);
+
                 System.out.println("RMI intialized.");
+                System.out.println("Server started for url "+ url +":"+ port);
 
                 System.out.println("Configuration initializing...");
                 Properties prop = new Properties();
@@ -152,6 +182,21 @@ public class ServeurForum
             Scanner sc = new Scanner(System.in);
             String str = sc.nextLine();
 
+            if (str.startsWith("add ")) {
+                String[] params = str.split(" ");
+                if (params.length < 2) {
+                    System.out.println("Invalid syntax : \nadd <serverUrl>:<serverPort>");
+                    continue;
+                }
+
+                try {
+                    serveur.addServer(params[1]);
+                } catch (RemoteException e) {
+                    System.out.println("Unable to contact local server...");
+                    continue;
+                }
+
+            }
             if ("stop".equals(str)) {
                 exit = true;
             }
@@ -162,9 +207,10 @@ public class ServeurForum
         System.out.println("Extinction du serveur...");
 
         try {
-            Naming.unbind("//127.0.0.1:8090/auth");
-            Naming.unbind("//127.0.0.1:8090/list");
-            Naming.unbind("//127.0.0.1:8090/join");
+            Naming.unbind(urlPort +"/auth");
+            Naming.unbind(urlPort +"/list");
+            Naming.unbind(urlPort +"/join");
+            Naming.unbind(urlPort +"/endpoint");
 
             System.out.println("Serveur éteint");
         } catch (RemoteException e) {
@@ -180,9 +226,9 @@ public class ServeurForum
 
 	synchronized public void shutdown() {
 
-		Set<Integer> ids = salons.keySet();
+		Set<String> ids = salons.keySet();
 		try {
-			for (Integer id : ids) {
+			for (String id : ids) {
 				ISujetDiscussion topic = salons.get(id);
 				List<IAfficheurClient> abonnes = topic.getAfficheurs();
                 for (Iterator<IAfficheurClient> it = abonnes.iterator(); it.hasNext(); ) {
@@ -208,31 +254,45 @@ public class ServeurForum
         }
 	}
 
-    public boolean add(String title, String owner) throws RemoteException {
-        int i = 1;
-        while (salons.get(i) != null) {
-            i++;
+    public ServeurResponse add(String title, String owner) throws RemoteException {
+
+        try {
+            MessageDigest encryption = MessageDigest.getInstance("MD5");
+            byte[] bytesKey = (owner + title).getBytes("UTF-8");
+            String key = new String(encryption.digest(bytesKey),  StandardCharsets.UTF_8);
+
+            if (salons.get(key) != null) {
+                return ServeurResponse.TOPIC_KNOWN;
+            }
+
+            salons.put(key, new SujetDiscussion(title, owner));
+            logger.info("A new topic named '"+ title +"' has been made by "+ owner);
+
+            logger.info( listeners.size() + " clients to notify");
+
+            int i = 1;
+            for (IClientForum listener : listeners) {
+                try {
+                    listener.updateTopics(salons);
+                    logger.info("Notified client #"+ (i++));
+                } catch (RemoteException e) {
+                    logger.info("Unable to update client #"+ (i++) );
+                }
+
+            }
+
+            logger.info( knownServers.size() + " servers to notify");
+            broadcast(title, owner);
+
+        } catch (NoSuchAlgorithmException | UnsupportedEncodingException e) {
+            e.printStackTrace();
+            return ServeurResponse.ERROR;
         }
-        salons.put(i, new SujetDiscussion(title, owner));
-        logger.info("A new topic named '"+ title +"' has been made by "+ owner);
 
-        logger.info( listeners.size() + " clients to notify");
-
-		i = 0;
-        for (IClientForum listener : listeners) {
-			try {
-            	listener.updateTopics(salons);
-				logger.info("Notified client #"+ (i++));
-			} catch (RemoteException e) {
-				logger.info("Unable to update client #"+ (i++) );
-			}
-			
-        }
-
-        return true;
+        return ServeurResponse.TOPIC_UNKNOWN;
     }
 
-	public boolean delete(Integer id, String owner) throws RemoteException {
+	public boolean delete(String id, String owner) throws RemoteException {
 		try {
 			ISujetDiscussion topic = salons.get(id);
 			if (owner.equals(topic.getOwner())) {
@@ -290,4 +350,45 @@ public class ServeurForum
             return new CommandFeedback("Unknow command !", false);
         }
     }
+
+    /**
+     * Add a server to the list of known servers.
+     * @param url the complete url (containing port if required) of the given server
+     */
+    public void addServer(String url) throws RemoteException {
+        try {
+            IServeurForum server = (IServeurForum) Naming.lookup(url +"/endpoint");
+            boolean alreadyknown = knownServers.add(server);
+            if (!alreadyknown) {
+                System.out.println("server "+ url +" is already known");
+                return;
+            }
+
+            //Force the remote serveur to add the current one
+            server.acknowledgeServer(this);
+
+        } catch (RemoteException | MalformedURLException e) {
+            System.out.println("Error while accessing server " + url + " : url may be malformed or the remote server may be unavailable");
+        } catch (NotBoundException e) {
+            System.out.println("No associate binding for server " + url + "");
+        }
+    }
+
+    @Override
+    public void acknowledgeServer(IServeurForum server) throws RemoteException {
+        knownServers.add(server);
+    }
+
+    /**
+     * Broadcast changes to known servers
+     */
+    public boolean broadcast(String title, String owner) throws RemoteException {
+        System.out.println("Noticing "+ knownServers.size() +" known servers that a new topic has been created");
+        for (IServeurForum serveur : knownServers) {
+            ServeurBroadcast bcast = new ServeurBroadcast(serveur, title, owner);
+            new Thread(bcast).start();
+        }
+        return true;
+    }
+
 }
