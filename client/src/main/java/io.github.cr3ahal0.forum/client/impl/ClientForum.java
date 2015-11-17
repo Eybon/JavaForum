@@ -26,9 +26,7 @@ import java.util.List;
 import javafx.stage.Stage;
 import javafx.application.Platform;
 
-public class ClientForum
-		extends UnicastRemoteObject
-        implements IClientForum, Observer
+public class ClientForum extends UnicastRemoteObject implements IClientForum, Observer
 {
 
     private HashMap<Channel, ISujetDiscussion> topics;
@@ -37,26 +35,19 @@ public class ClientForum
 
     private Window gui;
 
-    private Thread wt;
-
     private String login;
 
     IServeurForum server;
 
     IServeurForum auth;
 
-    SessionToken token;
-
-    Stage primaryStage;
-
-    private Launcher launcher;
-
+    private Stage m_primaryStage;
 
     public ClientForum(Stage primaryStage) throws RemoteException {
 
         try {
 
-            this.primaryStage = primaryStage;
+            m_primaryStage = primaryStage;
 
             auth = (IServeurForum) Naming.lookup("//127.0.0.1:8090/auth");
 
@@ -88,7 +79,7 @@ public class ClientForum
 
         try{
             gui = new Window(current);
-            gui.start(primaryStage);
+            gui.start(m_primaryStage);
             gui.updateListOfChannel(server.list());
         }    
         catch (Exception e){
@@ -221,7 +212,8 @@ public class ClientForum
 				String strArgs = command.replaceAll("[^0-9]+"," ");
 				List<String> list = Arrays.asList(strArgs.trim().split(" "));
 
-				if (list.size() > 0) {
+                //On veut toujours laisser ouvert le sujet de discussion principal -> impossible de fermer l'element 1
+				if ((list.size() > 0)&&(Integer.valueOf(list.get(0))!=1)) {
 					ISujetDiscussion destination = server.join(Integer.valueOf(list.get(0)));
 					if (destination == null) {
 						return;
@@ -265,42 +257,12 @@ public class ClientForum
         catch (RemoteException e) {
             e.printStackTrace();
         } 
-
 	}
-
 
     private void handleCommand(String command, Channel chan) {
         try {
             if (command.startsWith("/join ")) {
-                Integer id = Integer.valueOf(command.replace("/join ", ""));
-                ISujetDiscussion destination = server.join(id);
-                if (destination == null) {
-                    System.out.println("Error : this chanel does not exist !");
-                } else {
-                    boolean opened = false;
-                    Collection<ISujetDiscussion> rows = topics.values();
-                    if (rows.contains(destination)) {
-                        //This topic is already opened
-                        //chan.grabFocus();
-                    }
-                    else {
-
-                        IAfficheurClient window = new AfficheurClient();
-
-                        boolean test = destination.join(window);
-
-                        if (!test) {
-                            System.out.println("Error : failed to join " + destination.getTitle());
-                        } else {
-                            Channel panel = gui.addNewChannel(destination.getTitle());
-                            ((AfficheurClient) window).setChannel(panel);
-
-                            topics.put(panel, destination);
-
-                            System.out.println("Welcome to chanel " + destination.getTitle() + " !");
-                        }
-                    }
-                }
+                joinChannel(command);
             }
             else if(command.startsWith("/add ")){
                 addChannel(command);
@@ -309,22 +271,7 @@ public class ClientForum
                 deleteChannel(command);
             }
             else if (command.startsWith("/exit")) {
-                System.out.println("exit ?");
-                if (chan != null) {
-
-                    gui.removeChannel(chan);
-
-                    topics.remove(chan);
-                    /*gui.invalidate();
-                    gui.validate();
-                    gui.repaint();*/
-
-                    System.out.println("pan removed");
-                }
-                else
-                {
-                    System.out.println("chan null");
-                }
+                operationOnChannelWithName(chan.getName(),false);
 			}
             else
             {
