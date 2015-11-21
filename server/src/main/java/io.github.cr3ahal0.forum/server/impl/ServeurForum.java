@@ -6,13 +6,21 @@ import io.github.cr3ahal0.forum.server.ICommandFeedback;
 import io.github.cr3ahal0.forum.server.IServeurForum;
 import io.github.cr3ahal0.forum.server.ISujetDiscussion;
 import io.github.cr3ahal0.forum.server.ServeurResponse;
+import io.github.cr3ahal0.forum.server.impl.broadcast.ActionKind;
+import io.github.cr3ahal0.forum.server.impl.broadcast.ContentKind;
+import io.github.cr3ahal0.forum.server.impl.broadcast.HistoryAction;
 import io.github.cr3ahal0.forum.server.impl.commands.DiceMessage;
 import io.github.cr3ahal0.forum.server.impl.commands.ThirdPersonMessage;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import javax.xml.bind.JAXBContext;
+import javax.xml.bind.JAXBException;
+import javax.xml.bind.Marshaller;
+import javax.xml.bind.PropertyException;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.StringWriter;
 import java.io.UnsupportedEncodingException;
 import java.net.MalformedURLException;
 import java.nio.charset.StandardCharsets;
@@ -24,6 +32,7 @@ import java.rmi.registry.LocateRegistry;
 import java.rmi.server.UnicastRemoteObject;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.sql.Date;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -49,6 +58,10 @@ public class ServeurForum
 
     private Integer port;
 
+    private List<HistoryAction> history;
+
+    private final static String SERVER_OWNER = "root";
+
     protected ServeurForum(String url, Integer port) throws RemoteException {
 
         this.url = url;
@@ -59,20 +72,22 @@ public class ServeurForum
 
         knownServers = new HashSet<IServeurForum>();
 
+        history = Collections.synchronizedList(new ArrayList<HistoryAction>());
+
         int i = 1;
 
-        salons.put(String.valueOf(i++), new SujetDiscussion("GlobalChat"));
-        salons.put(String.valueOf(i++), new SujetDiscussion("Middleware"));
-        salons.put(String.valueOf(i++), new SujetDiscussion("IHM"));
-        salons.put(String.valueOf(i++), new SujetDiscussion("Architecture Logicielle"));
-        salons.put(String.valueOf(i++), new SujetDiscussion("Architectures Distribuées"));
-        salons.put(String.valueOf(i++), new SujetDiscussion("MDE"));
-        salons.put(String.valueOf(i++), new SujetDiscussion("Web Semantique"));
-        salons.put(String.valueOf(i++), new SujetDiscussion("Cloud Computing"));
-        salons.put(String.valueOf(i++), new SujetDiscussion("Conference"));
-        salons.put(String.valueOf(i++), new SujetDiscussion("Meta-Meta-Meta-Model"));
-        salons.put(String.valueOf(i++), new SujetDiscussion("Base de Données"));
-        salons.put(String.valueOf(i++), new SujetDiscussion("HTml 7"));
+        salons.put(String.valueOf(i), new SujetDiscussion("GlobalChat", "root", String.valueOf(i++)));
+        salons.put(String.valueOf(i), new SujetDiscussion("Middleware", "root", String.valueOf(i++)));
+        salons.put(String.valueOf(i), new SujetDiscussion("IHM", "root", String.valueOf(i++)));
+        salons.put(String.valueOf(i), new SujetDiscussion("Architecture Logicielle", "root", String.valueOf(i++)));
+        salons.put(String.valueOf(i), new SujetDiscussion("Architectures Distribuées", "root", String.valueOf(i++)));
+        salons.put(String.valueOf(i), new SujetDiscussion("MDE", "root", String.valueOf(i++)));
+        salons.put(String.valueOf(i), new SujetDiscussion("Web Semantique", "root", String.valueOf(i++)));
+        salons.put(String.valueOf(i), new SujetDiscussion("Cloud Computing", "root", String.valueOf(i++)));
+        salons.put(String.valueOf(i), new SujetDiscussion("Conference", "root", String.valueOf(i++)));
+        salons.put(String.valueOf(i), new SujetDiscussion("Meta-Meta-Meta-Model", "root", String.valueOf(i++)));
+        salons.put(String.valueOf(i), new SujetDiscussion("Base de Données", "root", String.valueOf(i++)));
+        salons.put(String.valueOf(i), new SujetDiscussion("HTml 7", "root", String.valueOf(i++)));
 
 
         up = true;
@@ -90,7 +105,7 @@ public class ServeurForum
 
     public boolean auth(IClientForum token, String username, String password) throws RemoteException {
 
-        if ( (!username.equals("")) && (password.equals("")) ) {
+        if ( (!username.equals("")) && !SERVER_OWNER.equals(username) && (password.equals("")) ) {
             System.out.println("[Login] Access granted to " + username);
             listeners.add(token);
             return true;
@@ -115,6 +130,29 @@ public class ServeurForum
         }
 
         return token;
+    }
+
+    public ServeurResponse join (ISujetDiscussion topic, IAfficheurClient client) throws RemoteException {
+
+        try {
+            //local join
+            salons.get(topic.getId()).join(client);
+        } catch (RemoteException e) {
+            logger.error("Error while notifying local topic");
+            return ServeurResponse.ERROR;
+        }
+
+        //broadcast to neightbourgs
+        for (IServeurForum neighbourg : knownServers) {
+            try {
+                logger.info("Notifying remote server " + neighbourg.getUrl() + " at port "+ neighbourg.getPort() + "about people joining chanel " + topic.getTitle());
+                neighbourg.join(topic, client);
+            } catch (RemoteException e) {
+                logger.error("Error while attempting to send join request to server " + neighbourg.getUrl() + " at port "+ neighbourg.getPort());
+            }
+        }
+
+        return ServeurResponse.OK;
     }
 
     public static void main(String[] args) {
@@ -167,6 +205,7 @@ public class ServeurForum
                 booted = serveur.isUp();
             } catch (RemoteException e) {
                 System.out.println("Impossible de démarrer le serveur !");
+                e.printStackTrace();
             } catch (MalformedURLException e) {
                System.out.println("L'URL de connexion est incorrecte");
             } catch (AlreadyBoundException e) {
@@ -265,7 +304,26 @@ public class ServeurForum
                 return ServeurResponse.TOPIC_KNOWN;
             }
 
-            salons.put(key, new SujetDiscussion(title, owner));
+            salons.put(key, new SujetDiscussion(title, owner, key));
+
+            //Marshalling
+            JAXBContext jaxbContext = JAXBContext.newInstance(SujetDiscussion.class);
+            Marshaller jaxbMarshaller = jaxbContext.createMarshaller();
+            StringWriter sw = new StringWriter();
+
+            // output pretty printed
+            jaxbMarshaller.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, true);
+
+            jaxbMarshaller.marshal(salons.get(key), sw);
+
+            HistoryAction action = new HistoryAction();
+            action.setAction(ActionKind.CREATE);
+            action.setContent(ContentKind.TOPIC);
+            action.setClassifier(SujetDiscussion.class);
+            action.setData(sw.toString());
+
+            history.add(action);
+
             logger.info("A new topic named '"+ title +"' has been made by "+ owner);
 
             logger.info( listeners.size() + " clients to notify");
@@ -282,14 +340,41 @@ public class ServeurForum
             }
 
             logger.info( knownServers.size() + " servers to notify");
-            broadcast(title, owner);
+            broadcastNewTopic(title, owner);
 
         } catch (NoSuchAlgorithmException | UnsupportedEncodingException e) {
             e.printStackTrace();
             return ServeurResponse.ERROR;
+        } catch (PropertyException e) {
+            e.printStackTrace();
+        } catch (JAXBException e) {
+            logger.info("Error while marshalling topic");
+            e.printStackTrace();
         }
 
         return ServeurResponse.TOPIC_UNKNOWN;
+    }
+
+    public ServeurResponse addMessage(ISujetDiscussion topic, Date date, String content, String author) throws RemoteException {
+
+        try {
+            //Local broadcast
+            ServeurResponse localResponse = salons.get(topic.getId()).diffuser(date, content, author);
+            if (!localResponse.equals(ServeurResponse.MESSAGE_UNKNOWN)) {
+                logger.info("Message already knew this message, stopping broadcast");
+                return localResponse;
+            }
+
+            //Neighbourg broadcast
+            logger.info(knownServers.size() + " servers to notify");
+            broadcastNewMessage(topic, date, content, author);
+
+            return ServeurResponse.MESSAGE_UNKNOWN;
+        }
+        catch (RemoteException e) {
+            logger.error("Error while send new message");
+        }
+        return ServeurResponse.ERROR;
     }
 
 	public boolean delete(String id, String owner) throws RemoteException {
@@ -382,10 +467,22 @@ public class ServeurForum
     /**
      * Broadcast changes to known servers
      */
-    public boolean broadcast(String title, String owner) throws RemoteException {
+    public boolean broadcastNewTopic(String title, String owner) throws RemoteException {
         System.out.println("Noticing "+ knownServers.size() +" known servers that a new topic has been created");
         for (IServeurForum serveur : knownServers) {
             ServeurBroadcast bcast = new ServeurBroadcast(serveur, title, owner);
+            new Thread(bcast).start();
+        }
+        return true;
+    }
+
+    /**
+     * Broadcast new message to known servers
+     */
+    public boolean broadcastNewMessage(ISujetDiscussion topic, Date date, String content, String author) throws RemoteException {
+        System.out.println("Noticing "+ knownServers.size() +" known servers that a new message has been created");
+        for (IServeurForum serveur : knownServers) {
+            ServeurBroadcastNewMessage bcast = new ServeurBroadcastNewMessage(serveur, topic, date, content, author);
             new Thread(bcast).start();
         }
         return true;

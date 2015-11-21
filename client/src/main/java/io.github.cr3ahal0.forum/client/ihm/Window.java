@@ -4,6 +4,7 @@ import io.github.cr3ahal0.forum.client.impl.ClientForum;
 import io.github.cr3ahal0.forum.server.ISujetDiscussion;
 
 import javafx.application.Application;
+import javafx.application.Platform;
 import javafx.event.ActionEvent;
 import javafx.event.EventHandler;
 import javafx.geometry.Side;
@@ -180,14 +181,21 @@ public class Window extends Application {
             }
         }
 
-        try {
-            m_listOfChannel.setItems(FXCollections.observableArrayList(list));
-        } catch (Exception e) {
+        final String[] copyList = list;
+        Platform.runLater(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    m_listOfChannel.setItems(FXCollections.observableArrayList(copyList));
+                } catch (Exception e) {
+                    System.out.println("Exception occured while updating list of channels :");
+                    e.printStackTrace();
+                }
+            }
+        });
+    }
 
-        }
-	}
-
-	public Channel addNewChannel(String name){
+    public Channel addNewChannel(String name) {
 
         Channel chan = new Channel(name);
         chan.addObserver(m_clientForumParent);
@@ -198,62 +206,69 @@ public class Window extends Application {
         m_nbChannel++;
 
         return chan;
-	}
+    }
 
     public void removeChannel(Channel chan) {
 
-    	m_listTab.remove(chan);
-    	m_tabPane.getTabs().removeAll(chan);
-    	m_nbChannel--;
+        m_listTab.remove(chan);
+        m_tabPane.getTabs().removeAll(chan);
+        m_nbChannel--;
 
     }
 
-	public void initializeForTest(){
-		m_listTab.add(new Channel("tab 1"));
-		m_listTab.add(new Channel("tab 2"));
-		m_listTab.add(new Channel("tab 3"));
-		m_listTab.add(new Channel("tab 4"));
-	}
+    public void focusChannel(Channel chan) {
 
+        m_tabPane.getSelectionModel().select(chan);
 
-final static String WINDOW_NAME = "Forum#Chat#IRC#Yolo";
-final static int WINDOW_HEIGHT = 650;
-final static int WINDOW_WIDTH = 1000;
-
-
-    @Override public void start(Stage primaryStage) throws Exception {
-
-    	createForum();
-
-		/** Pane principal**/
-		BorderPane root = new BorderPane();
-		root.setRight(m_tabPane);
-		root.setLeft(m_toolZone);
-
-		/** Fenetre **/
-		final Scene scene = new Scene(root, WINDOW_WIDTH, WINDOW_HEIGHT);
-		//scene.getStylesheets().add(MainWindow.class.getResource("MainWindow.css").toExternalForm());
-
-		Rectangle2D screenBounds = Screen.getPrimary().getVisualBounds();
-		primaryStage.setX((screenBounds.getWidth() - WINDOW_WIDTH) / 2);
-		primaryStage.setY((screenBounds.getHeight() - WINDOW_HEIGHT) / 2);
-
-		m_primaryStage = primaryStage;
-		primaryStage.setTitle(WINDOW_NAME);
-		primaryStage.setScene(scene);
-		primaryStage.setResizable(false);
-		primaryStage.show();
     }
 
-    public void setObserver(ClientForum parent){
-    	m_clientForumParent = parent;
+    public void initializeForTest() {
+        m_listTab.add(new Channel("tab 1"));
+        m_listTab.add(new Channel("tab 2"));
+        m_listTab.add(new Channel("tab 3"));
+        m_listTab.add(new Channel("tab 4"));
     }
 
-    /**
-     * Java main for when running without JavaFX launcher
-     */
+
+    final static String WINDOW_NAME = "Forum#Chat#IRC#Yolo ";
+    final static int WINDOW_HEIGHT = 650;
+    final static int WINDOW_WIDTH = 1000;
+
+
+    @Override
+    public void start(Stage primaryStage) throws Exception {
+
+        createForum();
+
+        /** Pane principal**/
+        BorderPane root = new BorderPane();
+        root.setRight(m_tabPane);
+        root.setLeft(m_toolZone);
+
+        /** Fenetre **/
+        final Scene scene = new Scene(root, WINDOW_WIDTH, WINDOW_HEIGHT);
+        //scene.getStylesheets().add(MainWindow.class.getResource("MainWindow.css").toExternalForm());
+
+        Rectangle2D screenBounds = Screen.getPrimary().getVisualBounds();
+        primaryStage.setX((screenBounds.getWidth() - WINDOW_WIDTH) / 2);
+        primaryStage.setY((screenBounds.getHeight() - WINDOW_HEIGHT) / 2);
+
+        m_primaryStage = primaryStage;
+        primaryStage.setTitle(WINDOW_NAME + " " + m_clientForumParent.getServer().getUrl() + ":" + m_clientForumParent.getServer().getPort());
+        primaryStage.setScene(scene);
+        primaryStage.setResizable(false);
+        primaryStage.show();
+    }
+
+    public void setObserver(ClientForum parent) {
+        m_clientForumParent = parent;
+    }
+
+            /**
+             * Java main for when running without JavaFX launcher
+             */
     /*public static void main(String[] args) {
         launch(args);
     }*/
 
-}
+        }

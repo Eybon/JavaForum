@@ -6,5 +6,8 @@ package io.github.cr3ahal0.forum.server;
 public enum ServeurResponse implements java.io.Serializable {
     TOPIC_KNOWN,
     TOPIC_UNKNOWN,
-    ERROR
+    MESSAGE_KNOWN,
+    MESSAGE_UNKNOWN,
+    ERROR,
+    OK
 }

@@ -20,7 +20,9 @@ import java.rmi.server.UnicastRemoteObject;
 import javax.swing.*;
 import java.rmi.Naming;
 import java.rmi.RemoteException;
+import java.sql.*;
 import java.util.*;
+import java.util.Date;
 import java.util.List;
 
 import io.github.cr3ahal0.forum.server.ServeurResponse;
@@ -83,6 +85,7 @@ public class ClientForum
 	}
 
     ClientForum current;
+
 	public void startWindow()
 	{     
         current = this;
@@ -279,16 +282,27 @@ public class ClientForum
                     boolean opened = false;
                     Collection<ISujetDiscussion> rows = topics.values();
                     if (rows.contains(destination)) {
+
+                        Set<Channel> chans = topics.keySet();
+                        for (Channel achan : chans) {
+                            if (topics.get(achan).getId().equals(destination.getId())) {
+                                gui.focusChannel(achan);
+                                break;
+                            }
+                        }
+
                         //This topic is already opened
                         //chan.grabFocus();
+
                     }
                     else {
 
                         IAfficheurClient window = new AfficheurClient();
 
-                        boolean test = destination.join(window);
+                        //boolean test = destination.join(window);
+                        ServeurResponse test = server.join(destination, window);
 
-                        if (!test) {
+                        if (!test.equals(ServeurResponse.OK)) {
                             System.out.println("Error : failed to join " + destination.getTitle());
                         } else {
                             Channel panel = gui.addNewChannel(destination.getTitle());
@@ -359,7 +373,10 @@ public class ClientForum
                 ISujetDiscussion sujet = topics.get(chan);
                 try {
                     System.out.println("Value of Message : "+str+" for user : "+login);
-                    sujet.diffuser(str, login);
+                    Calendar cal = Calendar.getInstance();
+                    java.sql.Date date = new java.sql.Date(cal.getTime().getTime());
+                    server.addMessage(sujet, date, str, login);
+                    //sujet.diffuser(str, login);
                     System.out.println("Message send to server!!");
                 } catch (RemoteException e) {
                     System.out.println("Unable to send the message.");
@@ -401,5 +418,8 @@ public class ClientForum
 		System.exit(1);
 	}
 
+    public IServeurForum getServer() {
+        return server;
+    }
 
 }

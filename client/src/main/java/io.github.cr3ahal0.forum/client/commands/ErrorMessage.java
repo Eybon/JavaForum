@@ -4,6 +4,7 @@ import io.github.cr3ahal0.forum.server.IMessage;
 
 import java.awt.*;
 import java.rmi.RemoteException;
+import java.sql.Date;
 
 /**
  * Created by Maxime on 14/10/2015.
@@ -17,6 +18,11 @@ public class ErrorMessage implements IMessage {
     }
 
     @Override
+    public String getContent() throws RemoteException {
+        return content;
+    }
+
+    @Override
     public String getString() throws RemoteException {
         return content;
     }
@@ -24,5 +30,15 @@ public class ErrorMessage implements IMessage {
     @Override
     public Color getColor() throws RemoteException {
         return Color.RED;
+    }
+
+    @Override
+    public Date getDate() throws RemoteException {
+        return null;
+    }
+
+    @Override
+    public String getUsername() throws RemoteException {
+        return "SYSTEM";
     }
 }

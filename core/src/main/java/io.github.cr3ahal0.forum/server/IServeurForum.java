@@ -1,9 +1,11 @@
 package io.github.cr3ahal0.forum.server;
 
+import io.github.cr3ahal0.forum.client.IAfficheurClient;
 import io.github.cr3ahal0.forum.client.IClientForum;
 
 import java.rmi.Remote;
 import java.rmi.RemoteException;
+import java.sql.Date;
 import java.util.List;
 import java.util.Map;
 
@@ -28,12 +30,17 @@ public interface IServeurForum extends Remote {
 
     public ServeurResponse add(String title, String owner) throws RemoteException;
 
+    public ServeurResponse addMessage(ISujetDiscussion topic, Date date, String content, String author) throws RemoteException;
+
+    public ServeurResponse join(ISujetDiscussion topic, IAfficheurClient client) throws RemoteException;
+
 	public boolean delete(String topic, String owner) throws RemoteException;
 
     public void addServer(String url) throws RemoteException;
 
     public void acknowledgeServer(IServeurForum server) throws RemoteException;
 
-    public boolean broadcast(String title, String owner) throws RemoteException;
+    public boolean broadcastNewTopic(String title, String owner) throws RemoteException;
 
+    public boolean broadcastNewMessage(ISujetDiscussion topic, Date date, String content, String author) throws RemoteException;
 }

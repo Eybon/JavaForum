@@ -4,6 +4,7 @@ import io.github.cr3ahal0.forum.client.IAfficheurClient;
 
 import java.rmi.Remote;
 import java.rmi.RemoteException;
+import java.sql.Date;
 import java.util.List;
 
 /**
@@ -11,9 +12,11 @@ import java.util.List;
  */
 public interface ISujetDiscussion extends Remote {
 
-    public void diffuser(String content, String author) throws RemoteException;
+    public ServeurResponse diffuser(Date date, String content, String author) throws RemoteException;
 
     public void diffuser(IMessage m) throws RemoteException;
+
+    public String getId() throws RemoteException;
 
     public String getTitle() throws RemoteException;
 
