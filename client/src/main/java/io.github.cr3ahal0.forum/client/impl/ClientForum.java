@@ -21,6 +21,8 @@ import javax.swing.*;
 import java.rmi.Naming;
 import java.rmi.RemoteException;
 import java.sql.*;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.Date;
 import java.util.List;
@@ -373,9 +375,7 @@ public class ClientForum
                 ISujetDiscussion sujet = topics.get(chan);
                 try {
                     System.out.println("Value of Message : "+str+" for user : "+login);
-                    Calendar cal = Calendar.getInstance();
-                    java.sql.Date date = new java.sql.Date(cal.getTime().getTime());
-                    server.addMessage(sujet, date, str, login);
+                    server.addMessage(sujet, LocalDateTime.now(), str, login);
                     //sujet.diffuser(str, login);
                     System.out.println("Message send to server!!");
                 } catch (RemoteException e) {

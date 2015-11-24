@@ -7,6 +7,7 @@ import org.codehaus.jackson.map.deser.std.DateDeserializer;
 
 import java.rmi.RemoteException;
 import java.sql.Date;
+import java.time.LocalDateTime;
 
 /**
  * Created by Maxime on 11/11/2015.
@@ -17,7 +18,7 @@ public class ServeurBroadcastNewMessage implements Runnable {
 
     ISujetDiscussion topic;
 
-    Date date;
+    LocalDateTime date;
 
     String content;
 
@@ -25,7 +26,7 @@ public class ServeurBroadcastNewMessage implements Runnable {
 
     boolean alive = true;
 
-    public ServeurBroadcastNewMessage(IServeurForum server, ISujetDiscussion topic, Date date, String content, String author) {
+    public ServeurBroadcastNewMessage(IServeurForum server, ISujetDiscussion topic, LocalDateTime date, String content, String author) {
         remoteServer = server;
         this.topic = topic;
         this.date = date;
@@ -42,7 +43,7 @@ public class ServeurBroadcastNewMessage implements Runnable {
             try {
 
                 System.out.println("Attempt to notify server "+ remoteServer.getUrl() +":"+ remoteServer.getPort() +" ...");
-                end = remoteServer.addMessage(topic, date, content, author);
+                //end = remoteServer.addMessage(topic, date, content, author);
 
                 if (end.equals(ServeurResponse.MESSAGE_UNKNOWN)) {
                     System.out.println("Server " + remoteServer.getUrl() + ":" + remoteServer.getPort() + " has been notified correctly");

@@ -1,37 +1,52 @@
 package io.github.cr3ahal0.forum.server.impl;
 
+import io.github.cr3ahal0.forum.LocalDateTimeAdapter;
 import io.github.cr3ahal0.forum.server.IMessage;
 import io.github.cr3ahal0.forum.server.ISujetDiscussion;
 
+import javax.xml.bind.annotation.XmlAccessType;
+import javax.xml.bind.annotation.XmlAccessorType;
+import javax.xml.bind.annotation.XmlElement;
+import javax.xml.bind.annotation.XmlRootElement;
+import javax.xml.bind.annotation.adapters.XmlJavaTypeAdapter;
+import javax.xml.bind.annotation.adapters.XmlJavaTypeAdapters;
 import java.awt.*;
 import java.rmi.RemoteException;
 import java.rmi.server.UnicastRemoteObject;
 import java.sql.Date;
 import java.io.Serializable;
 import java.text.SimpleDateFormat;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 
 /**
  * Created by Maxime on 24/09/2015.
  */
+@XmlAccessorType(XmlAccessType.NONE)
+@XmlRootElement
 public class Message extends UnicastRemoteObject implements IMessage, Comparable<Message>, Serializable{
 
-    private Integer id;
+    private String id;
 
     protected String username;
 
     protected String content;
 
-    protected Date date;
+    protected LocalDateTime date;
 
-    private ISujetDiscussion chanel;
+    private SujetDiscussion chanel;
 
-    public Message (String content, String username, ISujetDiscussion chanel) throws RemoteException {
+    public Message() throws RemoteException {
+
+    }
+
+    public Message (String content, String username, SujetDiscussion chanel) throws RemoteException {
         this.username = username;
         this.content = content;
         this.chanel = chanel;
     }
 
-    public Message (Integer id, String username, String content, Date date, ISujetDiscussion chanel) throws RemoteException {
+    public Message (String id, String username, String content, LocalDateTime date, SujetDiscussion chanel) throws RemoteException {
         this.id = id;
         this.username = username;
         this.content = content;
@@ -39,11 +54,13 @@ public class Message extends UnicastRemoteObject implements IMessage, Comparable
         this.chanel = chanel;
     }
 
-    public Integer getId() throws RemoteException {
+    public String getId() throws RemoteException {
         return id;
     }
 
-    public void setId(Integer id) throws RemoteException {
+
+    @XmlElement
+    public void setId(String id) throws RemoteException {
         this.id = id;
     }
 
@@ -51,38 +68,43 @@ public class Message extends UnicastRemoteObject implements IMessage, Comparable
         return username;
     }
 
+    @XmlElement
     public void setUsername(String username) throws RemoteException {
-
+        this.username = username;
     }
 
     public String getContent() throws RemoteException {
         return content;
     }
 
+    @XmlElement
     public void setContent(String content) throws RemoteException {
         this.content = content;
     }
 
-    public Date getDate() throws RemoteException {
+    public LocalDateTime getDate() throws RemoteException {
         return date;
     }
 
-    public void setDate(Date date) throws RemoteException {
+    @XmlJavaTypeAdapter(type=LocalDateTime.class, value=LocalDateTimeAdapter.class)
+    @XmlElement
+    public void setDate(LocalDateTime date) throws RemoteException {
         this.date = date;
     }
 
-    public ISujetDiscussion getChanel() throws RemoteException {
+    public SujetDiscussion getChanel() throws RemoteException {
         return chanel;
     }
 
-    public void setChanel(ISujetDiscussion chanel) throws RemoteException {
+    @XmlElement
+    public void setChanel(SujetDiscussion chanel) throws RemoteException {
         this.chanel = chanel;
     }
 
     @Override
     public int compareTo(Message o) {
         try {
-            if (o.getDate().after(date)) {
+            if (o.getDate().isAfter(date)) {
                 return -1;
             }
         } catch (RemoteException e) {
@@ -93,7 +115,8 @@ public class Message extends UnicastRemoteObject implements IMessage, Comparable
 
     public String getString() throws RemoteException {
         try {
-            String date = new SimpleDateFormat("HH:mm").format(getDate());
+            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("HH:mm");
+            String date = getDate().format(formatter);
             return "[" + date + "]" + " " + "<" + getUsername() + "> " + getContent();
         } catch (RemoteException e) {
             System.out.println("Unable to print message string");

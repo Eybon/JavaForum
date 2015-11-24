@@ -2,26 +2,17 @@ package io.github.cr3ahal0.forum.server.impl;
 
 import io.github.cr3ahal0.forum.client.IAfficheurClient;
 import io.github.cr3ahal0.forum.client.IClientForum;
-import io.github.cr3ahal0.forum.server.ICommandFeedback;
-import io.github.cr3ahal0.forum.server.IServeurForum;
-import io.github.cr3ahal0.forum.server.ISujetDiscussion;
-import io.github.cr3ahal0.forum.server.ServeurResponse;
-import io.github.cr3ahal0.forum.server.impl.broadcast.ActionKind;
-import io.github.cr3ahal0.forum.server.impl.broadcast.ContentKind;
-import io.github.cr3ahal0.forum.server.impl.broadcast.HistoryAction;
+import io.github.cr3ahal0.forum.server.*;
+import io.github.cr3ahal0.forum.server.exceptions.UnknownContentKindException;
+import io.github.cr3ahal0.forum.server.impl.broadcast.*;
 import io.github.cr3ahal0.forum.server.impl.commands.DiceMessage;
 import io.github.cr3ahal0.forum.server.impl.commands.ThirdPersonMessage;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import javax.xml.bind.JAXBContext;
-import javax.xml.bind.JAXBException;
-import javax.xml.bind.Marshaller;
-import javax.xml.bind.PropertyException;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.StringWriter;
-import java.io.UnsupportedEncodingException;
+import javax.xml.bind.*;
+import java.io.*;
+import java.math.BigInteger;
 import java.net.MalformedURLException;
 import java.nio.charset.StandardCharsets;
 import java.rmi.AlreadyBoundException;
@@ -33,6 +24,7 @@ import java.rmi.server.UnicastRemoteObject;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.sql.Date;
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -52,15 +44,130 @@ public class ServeurForum
         return up;
     }
 
-    private Set<IServeurForum> knownServers;
-
     private String url;
 
     private Integer port;
 
-    private List<HistoryAction> history;
-
     private final static String SERVER_OWNER = "root";
+
+    public BroadcastEndpoint getEndPoint() {
+        return endpoint;
+    }
+
+    BroadcastEndpoint endpoint;
+
+    RepositoryHandler repositoryHandler;
+
+    DataRepository topicsRepository = new DataRepository<ISujetDiscussion, String>() {
+
+        @Override
+        public ISujetDiscussion get(String id) {
+            return salons.get(id);
+        }
+
+
+        @Override
+        public boolean has(ISujetDiscussion object) {
+            try {
+                return (salons.get(object.getId()) != null);
+            } catch (RemoteException e) {
+                e.printStackTrace();
+            }
+            return false;
+        }
+
+
+        @Override
+        public CRUDResult remove(ISujetDiscussion object) {
+            if (has(object)) {
+                salons.remove(object);
+
+                int i = 1;
+                for (IClientForum listener : listeners) {
+                    try {
+                        listener.updateTopics(salons);
+                        logger.info("Notified client #" + (i++));
+                    } catch (RemoteException e) {
+                        logger.info("Unable to update client #" + (i++));
+                    }
+                }
+
+                return CRUDResult.OK;
+            }
+            return CRUDResult.KO;
+        }
+
+        @Override
+        public CRUDResult add(ISujetDiscussion object) {
+            try {
+                if (!has(object)) {
+                    salons.put(object.getId(), object);
+
+                    int i = 1;
+                    for (IClientForum listener : listeners) {
+                        try {
+                            listener.updateTopics(salons);
+                            logger.info("Notified client #" + (i++));
+                        } catch (RemoteException e) {
+                            logger.info("Unable to update client #" + (i++));
+                        }
+                    }
+
+                    return CRUDResult.OK;
+                }
+                return CRUDResult.KO;
+            } catch (RemoteException e) {
+                e.printStackTrace();
+            }
+            return CRUDResult.ERROR;
+        }
+    };
+
+    DataRepository messagesRepository = new DataRepository<IMessage, String>()
+    {
+
+        @Override
+        public IMessage get(String id) {
+            //TODO implement
+            return null;
+        }
+
+        @Override
+        public CRUDResult add(IMessage object) {
+            try {
+                DataRepository repo = (DataRepository)ServeurForum.this.salons.get(object.getChanel().getId());
+                return repo.add(object);
+            } catch (RemoteException e) {
+                e.printStackTrace();
+            }
+            return CRUDResult.ERROR;
+        }
+
+        @Override
+        public CRUDResult remove(IMessage object) {
+            try {
+                DataRepository repo = (DataRepository)ServeurForum.this.salons.get(object.getChanel().getId());
+                return repo.remove(object);
+            } catch (RemoteException e) {
+                e.printStackTrace();
+            }
+            return CRUDResult.ERROR;
+        }
+
+
+        @Override
+        public boolean has(IMessage object) {
+            try {
+                DataRepository repo = (DataRepository)ServeurForum.this.salons.get(object.getChanel().getId());
+                return repo.has(object);
+            } catch (RemoteException e) {
+                e.printStackTrace();
+            }
+            return false;
+        }
+    };
+
+    Map<Class, DataRepository> repositories = new ConcurrentHashMap<Class, DataRepository>();
 
     protected ServeurForum(String url, Integer port) throws RemoteException {
 
@@ -69,10 +176,6 @@ public class ServeurForum
 
         listeners = new ArrayList<IClientForum>();
         salons = new ConcurrentHashMap<String, ISujetDiscussion>();
-
-        knownServers = new HashSet<IServeurForum>();
-
-        history = Collections.synchronizedList(new ArrayList<HistoryAction>());
 
         int i = 1;
 
@@ -89,8 +192,25 @@ public class ServeurForum
         salons.put(String.valueOf(i), new SujetDiscussion("Base de Données", "root", String.valueOf(i++)));
         salons.put(String.valueOf(i), new SujetDiscussion("HTml 7", "root", String.valueOf(i++)));
 
-
         up = true;
+
+        repositories.put(SujetDiscussion.class, topicsRepository);
+        repositories.put(Message.class, messagesRepository);
+
+        repositoryHandler = new RepositoryHandler() {
+
+            @Override
+            public DataRepository get(Class c) {
+                return repositories.get(c);
+            }
+
+            @Override
+            public Object getRepositories() {
+                return null;
+            }
+        };
+
+        endpoint = new ServerEndpoint(this, repositoryHandler);
     }
 
     @Override
@@ -143,14 +263,14 @@ public class ServeurForum
         }
 
         //broadcast to neightbourgs
-        for (IServeurForum neighbourg : knownServers) {
+        /*for (BroadcastEndpoint neighbourg : knownServers) {
             try {
-                logger.info("Notifying remote server " + neighbourg.getUrl() + " at port "+ neighbourg.getPort() + "about people joining chanel " + topic.getTitle());
-                neighbourg.join(topic, client);
+                logger.info("Notifying remote server " + neighbourg.getHandler().getUrl() + " at port "+ neighbourg.getHandler().getPort() + "about people joining chanel " + topic.getTitle());
+                neighbourg.getHandler().join(topic, client);
             } catch (RemoteException e) {
-                logger.error("Error while attempting to send join request to server " + neighbourg.getUrl() + " at port "+ neighbourg.getPort());
+                logger.error("Error while attempting to send join request to server " + neighbourg.getHandler().getUrl() + " at port "+ neighbourg.getHandler().getPort());
             }
-        }
+        }*/
 
         return ServeurResponse.OK;
     }
@@ -168,16 +288,17 @@ public class ServeurForum
 
         while (!booted) {
             try {
+                Thread.sleep(2000);
                 serveur = new ServeurForum(url, port);
 
                 System.out.println("RMI initializing...");
                 LocateRegistry.createRegistry(port);
 
-                Naming.bind(urlPort + "/auth", serveur);
-                Naming.bind(urlPort + "/list", serveur);
-                Naming.bind(urlPort + "/join", serveur);
+                Naming.rebind(urlPort + "/auth", serveur);
+                Naming.rebind(urlPort + "/list", serveur);
+                Naming.rebind(urlPort + "/join", serveur);
 
-                Naming.bind(urlPort + "/endpoint", serveur);
+                Naming.rebind(urlPort + "/endpoint", serveur.getEndPoint());
 
                 System.out.println("RMI intialized.");
                 System.out.println("Server started for url "+ url +":"+ port);
@@ -208,10 +329,10 @@ public class ServeurForum
                 e.printStackTrace();
             } catch (MalformedURLException e) {
                System.out.println("L'URL de connexion est incorrecte");
-            } catch (AlreadyBoundException e) {
-                System.out.println("Erreur de binding");
             } catch (IOException e) {
                 System.out.println("Impossible de charger le fichier de configuration du serveur");
+            } catch (InterruptedException e) {
+                e.printStackTrace();
             }
         }
 
@@ -229,7 +350,7 @@ public class ServeurForum
                 }
 
                 try {
-                    serveur.addServer(params[1]);
+                    serveur.endpoint.addServer(params[1]);
                 } catch (RemoteException e) {
                     System.out.println("Unable to contact local server...");
                     continue;
@@ -300,11 +421,16 @@ public class ServeurForum
             byte[] bytesKey = (owner + title).getBytes("UTF-8");
             String key = new String(encryption.digest(bytesKey),  StandardCharsets.UTF_8);
 
+            // >> test
+            final BigInteger bigint = new BigInteger(1, encryption.digest(bytesKey));
+            key = String.format("%032x", bigint);
+            // << endtest
+
             if (salons.get(key) != null) {
                 return ServeurResponse.TOPIC_KNOWN;
             }
 
-            salons.put(key, new SujetDiscussion(title, owner, key));
+            ISujetDiscussion result = new SujetDiscussion(title, owner, key);
 
             //Marshalling
             JAXBContext jaxbContext = JAXBContext.newInstance(SujetDiscussion.class);
@@ -314,7 +440,9 @@ public class ServeurForum
             // output pretty printed
             jaxbMarshaller.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, true);
 
-            jaxbMarshaller.marshal(salons.get(key), sw);
+            jaxbMarshaller.marshal(result, sw);
+
+            logger.info(sw.getBuffer().toString());
 
             HistoryAction action = new HistoryAction();
             action.setAction(ActionKind.CREATE);
@@ -322,7 +450,9 @@ public class ServeurForum
             action.setClassifier(SujetDiscussion.class);
             action.setData(sw.toString());
 
-            history.add(action);
+            endpoint.broadcast(action);
+
+            /*history.add(action);
 
             logger.info("A new topic named '"+ title +"' has been made by "+ owner);
 
@@ -341,7 +471,8 @@ public class ServeurForum
 
             logger.info( knownServers.size() + " servers to notify");
             broadcastNewTopic(title, owner);
-
+            */
+            return ServeurResponse.TOPIC_UNKNOWN;
         } catch (NoSuchAlgorithmException | UnsupportedEncodingException e) {
             e.printStackTrace();
             return ServeurResponse.ERROR;
@@ -351,31 +482,55 @@ public class ServeurForum
             logger.info("Error while marshalling topic");
             e.printStackTrace();
         }
+        return ServeurResponse.ERROR;
 
-        return ServeurResponse.TOPIC_UNKNOWN;
     }
 
-    public ServeurResponse addMessage(ISujetDiscussion topic, Date date, String content, String author) throws RemoteException {
+
+    public ServeurResponse addMessage(ISujetDiscussion topic, LocalDateTime date, String content, String author) throws RemoteException {
 
         try {
-            //Local broadcast
-            ServeurResponse localResponse = salons.get(topic.getId()).diffuser(date, content, author);
-            if (!localResponse.equals(ServeurResponse.MESSAGE_UNKNOWN)) {
-                logger.info("Message already knew this message, stopping broadcast");
-                return localResponse;
-            }
 
-            //Neighbourg broadcast
-            logger.info(knownServers.size() + " servers to notify");
-            broadcastNewMessage(topic, date, content, author);
+            ISujetDiscussion realTopic = salons.get(topic.getId());
+
+            Message message = new Message(content, author, (SujetDiscussion)realTopic);
+            message.setDate(date);
+            message.setId(realTopic.getMessageKey(author, date));
+
+            //Marshalling
+            JAXBContext jaxbContext = JAXBContext.newInstance(Message.class);
+            Marshaller jaxbMarshaller = jaxbContext.createMarshaller();
+            StringWriter sw = new StringWriter();
+
+            // output pretty printed
+            jaxbMarshaller.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, true);
+
+            jaxbMarshaller.marshal(message, sw);
+
+            HistoryAction action = new HistoryAction();
+            action.setAction(ActionKind.CREATE);
+            action.setContent(ContentKind.MESSAGE);
+            action.setClassifier(Message.class);
+            action.setData(sw.toString());
+
+            endpoint.broadcast(action);
 
             return ServeurResponse.MESSAGE_UNKNOWN;
         }
         catch (RemoteException e) {
             logger.error("Error while send new message");
+        } catch (PropertyException e) {
+            e.printStackTrace();
+        } catch (JAXBException e) {
+            e.printStackTrace();
+        } catch (NoSuchAlgorithmException e) {
+            e.printStackTrace();
+        } catch (UnsupportedEncodingException e) {
+            e.printStackTrace();
         }
         return ServeurResponse.ERROR;
     }
+
 
 	public boolean delete(String id, String owner) throws RemoteException {
 		try {
@@ -410,8 +565,8 @@ public class ServeurForum
                 return new CommandFeedback("Vous pouvez utiliser cette commande seulement dans un salon", false, true);
             }
 
-            ThirdPersonMessage m = new ThirdPersonMessage(cmd.replaceFirst("/me", user), user, topic);
-            m.setDate(new java.sql.Date(Calendar.getInstance().getTime().getTime()));
+            ThirdPersonMessage m = new ThirdPersonMessage(cmd.replaceFirst("/me", user), user, (SujetDiscussion)topic);
+            m.setDate(LocalDateTime.now());
             topic.diffuser(m);
 
             return new CommandFeedback("Me command", true);
@@ -425,8 +580,8 @@ public class ServeurForum
             Random rand = new Random();
             int nombreAleatoire = rand.nextInt(6) + 1;
 
-            DiceMessage m = new DiceMessage(Integer.toString(nombreAleatoire), user, topic);
-            m.setDate(new java.sql.Date(Calendar.getInstance().getTime().getTime()));
+            DiceMessage m = new DiceMessage(Integer.toString(nombreAleatoire), user, (SujetDiscussion)topic);
+            m.setDate(LocalDateTime.now());
             topic.diffuser(m);
 
             return new CommandFeedback("Dice command", true);
@@ -437,55 +592,31 @@ public class ServeurForum
     }
 
     /**
-     * Add a server to the list of known servers.
-     * @param url the complete url (containing port if required) of the given server
-     */
-    public void addServer(String url) throws RemoteException {
-        try {
-            IServeurForum server = (IServeurForum) Naming.lookup(url +"/endpoint");
-            boolean alreadyknown = knownServers.add(server);
-            if (!alreadyknown) {
-                System.out.println("server "+ url +" is already known");
-                return;
-            }
-
-            //Force the remote serveur to add the current one
-            server.acknowledgeServer(this);
-
-        } catch (RemoteException | MalformedURLException e) {
-            System.out.println("Error while accessing server " + url + " : url may be malformed or the remote server may be unavailable");
-        } catch (NotBoundException e) {
-            System.out.println("No associate binding for server " + url + "");
-        }
-    }
-
-    @Override
-    public void acknowledgeServer(IServeurForum server) throws RemoteException {
-        knownServers.add(server);
-    }
-
-    /**
      * Broadcast changes to known servers
      */
+    /*
     public boolean broadcastNewTopic(String title, String owner) throws RemoteException {
         System.out.println("Noticing "+ knownServers.size() +" known servers that a new topic has been created");
-        for (IServeurForum serveur : knownServers) {
+        for (BroadcastEndpoint serveur : knownServers) {
             ServeurBroadcast bcast = new ServeurBroadcast(serveur, title, owner);
             new Thread(bcast).start();
         }
         return true;
     }
+    */
 
     /**
      * Broadcast new message to known servers
      */
+    /*
     public boolean broadcastNewMessage(ISujetDiscussion topic, Date date, String content, String author) throws RemoteException {
         System.out.println("Noticing "+ knownServers.size() +" known servers that a new message has been created");
-        for (IServeurForum serveur : knownServers) {
+        for (BroadcastEndpoint serveur : knownServers) {
             ServeurBroadcastNewMessage bcast = new ServeurBroadcastNewMessage(serveur, topic, date, content, author);
             new Thread(bcast).start();
         }
         return true;
     }
+    */
 
 }

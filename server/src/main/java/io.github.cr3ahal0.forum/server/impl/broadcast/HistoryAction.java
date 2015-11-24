@@ -1,9 +1,11 @@
 package io.github.cr3ahal0.forum.server.impl.broadcast;
 
+import java.io.Serializable;
+
 /**
  * Created by Maxime on 17/11/2015.
  */
-public class HistoryAction {
+public class HistoryAction implements Serializable {
 
     private ContentKind content;
 
