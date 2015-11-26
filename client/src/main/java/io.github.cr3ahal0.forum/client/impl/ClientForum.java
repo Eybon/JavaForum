@@ -213,14 +213,16 @@ public class ClientForum extends UnicastRemoteObject implements IClientForum, Ob
 	 		if (command.startsWith("/exit")) 
 			{
 				
-				String strArgs = command.replaceAll("[^0-9]+"," ");
+				String strArgs = command.replaceAll("[/]exit ","");
 				List<String> list = Arrays.asList(strArgs.trim().split(" "));
 
                 //On veut toujours laisser ouvert le sujet de discussion principal -> impossible de fermer l'element 1
-				if ((list.size() > 0)&&(Integer.valueOf(list.get(0))!=1)) {
+				if ((list.size() > 0)&&((list.get(0))!="1")) {
+			
 					ISujetDiscussion destination = server.join(list.get(0));
 
 					if (destination == null) {
+						System.out.println("test");
 						return;
 					}
 		
