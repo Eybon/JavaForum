@@ -93,8 +93,8 @@ public class ClientForum extends UnicastRemoteObject implements IClientForum, Ob
         }
 	}
 
-    //operation à 1 pour ajouter et à 0 pour supprimer
-    public void operationOnChannelWithName(String nameOfChannel, boolean operation){
+    //join pour rejoindre, exit pour quitter, add pour ajouter, delete pour supprimer
+    public void operationOnChannelWithName(String nameOfChannel, String operation){
         Map<String, ISujetDiscussion>  top = null;
         try{
             top = server.list();
@@ -105,18 +105,21 @@ public class ClientForum extends UnicastRemoteObject implements IClientForum, Ob
         for (String key : keys) {
             try {
                 if(nameOfChannel.equals( top.get(key).getTitle()) ){
-                    if(operation){
+                    if(operation.equals("join")){
                         joinChannel("/join "+ key);
                     }
-                    else{
+                    if(operation.equals("exit")){
                         exitChannel("/exit "+ key);
                     }
+                    if(operation.equals("delete")){
+                        deleteChannel("/delete "+ key);
+                    }                    
                 }
             } catch (RemoteException e) {
                 e.printStackTrace();
             }
-        }
-
+        }    
+        
     }
 
     public void joinChannel(String command)
@@ -125,7 +128,7 @@ public class ClientForum extends UnicastRemoteObject implements IClientForum, Ob
             String id = command.replace("/join ", "");
             ISujetDiscussion destination = server.join(id);
             if (destination == null) {
-                System.out.println("Error : this chanel does not exist !");
+                System.out.println("Error : This Chanel doesn't exist !!");
             } else {
                 boolean opened = false;
                 Collection<ISujetDiscussion> rows = topics.values();
@@ -135,11 +138,9 @@ public class ClientForum extends UnicastRemoteObject implements IClientForum, Ob
                 else {
 
                     IAfficheurClient window = new AfficheurClient();
-
                     boolean test = destination.join(window);
-
                     if (!test) {
-                        System.out.println("Error : failed to join " + destination.getTitle());
+                        System.out.println("Error : Failed to join " + destination.getTitle());
                     } else {
                         Channel panel = gui.addNewChannel(destination.getTitle());
                         ((AfficheurClient) window).setChannel(panel);
@@ -147,9 +148,8 @@ public class ClientForum extends UnicastRemoteObject implements IClientForum, Ob
                         topics.put(panel, destination);
 						displays.put(destination, window);
 
-                        System.out.println("Welcome to chanel " + destination.getTitle() + " !");
+                        System.out.println("Welcome to Chanel " + destination.getTitle() + " !");
                     }
-
                 }
             }
         }
@@ -158,23 +158,22 @@ public class ClientForum extends UnicastRemoteObject implements IClientForum, Ob
         }            
     }
 
-
-    //Attention rajouter test sur l'existence du chanel !!! 
     public void addChannel(String command){
         try{
             String id = command.replace("/add ", "");
-            //ISujetDiscussion destination = server.join(id);
-            ISujetDiscussion destination = null;
+            System.out.println("Trying to add new Channel : -"+id+"-");
+            ISujetDiscussion destination = server.join(id);
+            //ISujetDiscussion destination = null;
             if(destination != null){
-                System.out.println("Error : this chanel exist !");
+                System.out.println("Error : This Channel already exist !!");
             } else {
 
                 ServeurResponse test = server.add(id,login);
 
                 if (!test.equals(ServeurResponse.TOPIC_UNKNOWN)) {
-                    System.out.println("Error : failed to add ");
+                    System.out.println("Error : Failed to add "+id);
                 } else {
-                    System.out.println("New Sujet Add");
+                    System.out.println(" --> New Sujet Add");
                 }                
             }
         }
@@ -183,22 +182,22 @@ public class ClientForum extends UnicastRemoteObject implements IClientForum, Ob
         }         
     }
 
-    //Attention rajouter test sur l'existence du chanel !!!   
     public void deleteChannel(String command){
         try{
             String id = command.replace("/delete ", "");
-            //ISujetDiscussion destination = server.join(id);
-            ISujetDiscussion destination = null;
-            if(destination != null){
-                System.out.println("Error : this chanel exist !");
+            System.out.println("Trying to delete Channel : -"+id+"-");
+            ISujetDiscussion destination = server.join(id);
+            //ISujetDiscussion destination = null;
+            if(destination == null){
+                System.out.println("Error : This Channel doesn't exist !");
             } else {
 
                 boolean test = server.delete(id,login);
 
                 if (!test) {
-                    System.out.println("Error : failed to delete ");
+                    System.out.println("Error : failed to delete "+id);
                 } else {
-                    System.out.println("Sujet Delete");
+                    System.out.println("  --> Sujet Delete");
                 }                
             }
         }
@@ -211,8 +210,7 @@ public class ClientForum extends UnicastRemoteObject implements IClientForum, Ob
 	{
         try {
 	 		if (command.startsWith("/exit")) 
-			{
-				
+			{	
 				String strArgs = command.replaceAll("[/]exit ","");
 				List<String> list = Arrays.asList(strArgs.trim().split(" "));
 
@@ -222,16 +220,13 @@ public class ClientForum extends UnicastRemoteObject implements IClientForum, Ob
 					ISujetDiscussion destination = server.join(list.get(0));
 
 					if (destination == null) {
-						System.out.println("test");
 						return;
 					}
-		
-					System.out.println("topic found : "+ destination.getTitle());
 
 					Set<Channel> chans = topics.keySet();
 					for (Channel c : chans) {
 						if (topics.get(c).equals(destination)) {
-							System.out.println("GUI chanel found for this topic");
+							//System.out.println("GUI chanel found for this topic");
 
 							//we found the chanel
 							IAfficheurClient iac = displays.get(destination);
@@ -255,7 +250,7 @@ public class ClientForum extends UnicastRemoteObject implements IClientForum, Ob
 							}
 						}
                         else{
-                            System.out.println("Error : need to follow first");
+                            System.out.println("Error : need to follow first !!");
                         }
 					}
 				}
@@ -269,16 +264,20 @@ public class ClientForum extends UnicastRemoteObject implements IClientForum, Ob
     private void handleCommand(String command, Channel chan) {
         try {
             if (command.startsWith("/join ")) {
-                joinChannel(command);
+				String name = command.replace("/join ", "");
+                operationOnChannelWithName(name,"join");
             }
             else if(command.startsWith("/add ")){
-                addChannel(command);
+                String name = command.replace("/add ", "");
+                addChannel(name);
             }
             else if(command.startsWith("/delete ")){
-                deleteChannel(command);
+                //deleteChannel(command);
+                String name = command.replace("/delete ", "");
+                operationOnChannelWithName(name,"delete");
             }
             else if (command.startsWith("/exit")) {
-                operationOnChannelWithName(chan.getName(),false);
+                operationOnChannelWithName(chan.getName(),"exit");
 			}
             else
             {

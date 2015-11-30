@@ -76,7 +76,7 @@ public class Window extends Application {
 		createListOfChannel();
 		createPanelTools();
 
-		m_clientForumParent.operationOnChannelWithName(NAME_OF_GLOBAL_CHAT,true);
+		m_clientForumParent.operationOnChannelWithName(NAME_OF_GLOBAL_CHAT,"join");
 
 	}
 
@@ -129,11 +129,11 @@ public class Window extends Application {
 				String nameOfChannel = m_listOfChannel.getSelectionModel().getSelectedItem();
 				//System.out.println("DEBUG :: Choix du channel : -"+value+"-");
 	            if(!subscribe(nameOfChannel)){
-	            	m_clientForumParent.operationOnChannelWithName(nameOfChannel,true);
+	            	m_clientForumParent.operationOnChannelWithName(nameOfChannel,"join");
 	            	addBtn.setText("Se désabonner");
 	            }
 	            else{
-	            	m_clientForumParent.operationOnChannelWithName(nameOfChannel,false);
+	            	m_clientForumParent.operationOnChannelWithName(nameOfChannel,"exit");
 	            	addBtn.setText("S'abonner");
 	            }				
 			}

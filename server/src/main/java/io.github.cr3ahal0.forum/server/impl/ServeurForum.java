@@ -537,7 +537,8 @@ public class ServeurForum
 			ISujetDiscussion topic = salons.get(id);
 			if (owner.equals(topic.getOwner())) {
 				//TODO
-                return true;
+				return false;
+                //return true;
 			} else {
 				logger.info("You ("+ owner +") dont owe this topic");
 				return false;

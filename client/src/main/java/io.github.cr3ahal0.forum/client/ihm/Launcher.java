@@ -92,6 +92,7 @@ public class Launcher extends Application
         grid.add(server, 0, 3);
 
         m_url = new TextField();
+        m_url.setText("//127.0.0.1");
         grid.add(m_url, 1, 3);
         m_url.setOnAction(new EventHandler<ActionEvent>() {
             @Override
@@ -104,6 +105,7 @@ public class Launcher extends Application
         grid.add(port, 0, 4);
 
         m_port = new TextField();
+        m_port.setText("8090");
         grid.add(m_port, 1, 4);
         m_port.setOnAction(new EventHandler<ActionEvent>() {
             @Override
