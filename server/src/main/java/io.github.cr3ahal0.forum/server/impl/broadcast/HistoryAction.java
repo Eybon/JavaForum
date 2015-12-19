@@ -1,6 +1,8 @@
 package io.github.cr3ahal0.forum.server.impl.broadcast;
 
 import java.io.Serializable;
+import java.util.Map;
+import java.util.UUID;
 
 /**
  * Created by Maxime on 17/11/2015.
@@ -14,6 +16,10 @@ public class HistoryAction implements Serializable {
     private Class classifier;
 
     private String data;
+
+    private Causality causality;
+
+    private UUID author;
 
     public ActionKind getAction() {
         return action;
@@ -45,5 +51,21 @@ public class HistoryAction implements Serializable {
 
     public void setContent(ContentKind kind) {
         this.content = kind;
+    }
+
+    public Causality getCausality() {
+        return causality;
+    }
+
+    public void setCausality(Causality causality) {
+        this.causality = causality;
+    }
+
+    public UUID getAuthor() {
+        return author;
+    }
+
+    public void setAuthor(UUID author){
+        this.author = author;
     }
 }

@@ -450,6 +450,13 @@ public class ServeurForum
             action.setClassifier(SujetDiscussion.class);
             action.setData(sw.toString());
 
+            //Increment self
+            Causality causality = endpoint.getCausality();
+            causality.increment(endpoint.getGUID());
+
+            action.setAuthor(endpoint.getGUID());
+            action.setCausality(causality);
+
             endpoint.broadcast(action);
 
             /*history.add(action);
@@ -512,6 +519,13 @@ public class ServeurForum
             action.setContent(ContentKind.MESSAGE);
             action.setClassifier(Message.class);
             action.setData(sw.toString());
+
+            //Increment self
+            Causality causality = endpoint.getCausality();
+            causality.increment(endpoint.getGUID());
+
+            action.setAuthor(endpoint.getGUID());
+            action.setCausality(causality);
 
             endpoint.broadcast(action);
 
