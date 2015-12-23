@@ -1,13 +1,16 @@
 package io.github.cr3ahal0.forum.server.impl.broadcast;
 
+import org.apache.http.impl.cookie.DateUtils;
+
 import java.io.Serializable;
+import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.UUID;
 
 /**
  * Created by Maxime on 17/11/2015.
  */
-public class HistoryAction implements Serializable {
+public class HistoryAction implements Serializable, Comparable<HistoryAction> {
 
     private ContentKind content;
 
@@ -20,6 +23,8 @@ public class HistoryAction implements Serializable {
     private Causality causality;
 
     private UUID author;
+
+    private LocalDateTime date;
 
     public ActionKind getAction() {
         return action;
@@ -67,5 +72,21 @@ public class HistoryAction implements Serializable {
 
     public void setAuthor(UUID author){
         this.author = author;
+    }
+
+    public void setDate(LocalDateTime date) {
+        this.date = date;
+    }
+
+    public LocalDateTime getDate() {
+        return date;
+    }
+
+    @Override
+    public int compareTo(HistoryAction o) {
+        if (getDate().isBefore(o.getDate())) {
+            return -1;
+        }
+        return 1;
     }
 }

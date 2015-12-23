@@ -18,6 +18,13 @@ public class Causality extends HashMap<UUID, Integer> {
         put(guid, value+1);
     }
 
+    public void incrementFrom(HistoryAction action) {
+        UUID author = action.getAuthor();
+        Causality from = action.getCausality();
+
+        put(author, Math.max(from.get(author), get(author)));
+    }
+
     public static void debug(Causality c1, Causality c2) {
 
         List<Integer> vals = new ArrayList(c1.values());

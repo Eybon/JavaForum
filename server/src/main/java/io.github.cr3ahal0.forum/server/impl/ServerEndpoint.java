@@ -18,11 +18,14 @@ import java.rmi.Remote;
 import java.rmi.RemoteException;
 import java.rmi.server.UnicastRemoteObject;
 import java.util.*;
+import java.util.function.Consumer;
 
 /**
  * Created by Maxime on 23/11/2015.
  */
 public class ServerEndpoint extends UnicastRemoteObject implements BroadcastEndpoint {
+
+    private Set<HistoryAction> buffer = Collections.synchronizedSet(new HashSet<HistoryAction>());
 
     private final UUID GUID = UUID.randomUUID();
 
@@ -45,7 +48,61 @@ public class ServerEndpoint extends UnicastRemoteObject implements BroadcastEndp
 
         //set new causality value
         causality.put(GUID, 0);
+
+        //prepare AA thread
+        AAThread = new Thread() {
+
+            @Override
+            public void run() {
+
+                try {
+                    while (true) {
+
+                        logger.info("Anti-Anthropy : start");
+
+                        try {
+
+                            //No need to check anthropy if it is a single server
+                            if (knownServers.size() == 0) {
+                                return;
+                            }
+
+                            int random = alea(0, knownServers.size() - 1);
+                            BroadcastEndpoint randomEndPoint = (BroadcastEndpoint) knownServers.toArray()[random];
+
+                            Set<HistoryAction> remoteHistory = randomEndPoint.getHistory();
+                            remoteHistory.forEach(new Consumer<HistoryAction>() {
+                                @Override
+                                public void accept(HistoryAction historyAction) {
+                                    if (!history.contains(historyAction)) {
+                                        try {
+                                            handleHistory(historyAction);
+                                        } catch (RemoteException | UnknownContentKindException e) {
+                                            e.printStackTrace();
+                                        }
+                                    }
+                                }
+                            });
+
+                        } catch (RemoteException e) {
+                            e.printStackTrace();
+                        }
+
+                        Thread.sleep(30000);
+                    }
+
+                }
+                catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+
+            }
+
+        };
+
     }
+
+    private Thread AAThread;
 
     @Override
     public UUID getGUID() throws RemoteException {
@@ -74,6 +131,10 @@ public class ServerEndpoint extends UnicastRemoteObject implements BroadcastEndp
             if (server.acknowledgeServer(this)) {
                 knownServers.add(server);
                 causality.put(server.getGUID(), server.getHistory().size());
+
+                if (!AAThread.isAlive()) {
+                    AAThread.run();
+                }
             }
         } catch (RemoteException | MalformedURLException e) {
             System.out.println("Error while accessing server " + url + " : url may be malformed or the remote server may be unavailable");
@@ -164,21 +225,54 @@ public class ServerEndpoint extends UnicastRemoteObject implements BroadcastEndp
         return isLower;
     }
 
+    /**
+     * Calcul un nombre aléatoire de type Double entre min et max
+     * @param min la borne minimum
+     * @param max la borne maximum
+     * @return un double aléatoire
+     */
+    public static int alea(int min, int max) {
+        Random rand = new Random();
+        return rand.nextInt((max - min) + 1) + min;
+    }
+
+    synchronized public void reviewBuffer() throws UnknownContentKindException, RemoteException {
+        List<HistoryAction> trash = new ArrayList<HistoryAction>();
+
+        logger.info(buffer.size() + " elements to review from the buffer");
+
+        for (HistoryAction action : buffer) {
+            //Is the reviewed history action lower in causality compared to the current local state
+            if (isLower(action)) {
+                //#1 Apply changes
+                handleHistory(action);
+
+                //#2 Update causality
+                causality.incrementFrom(action);
+
+                trash.add(action);
+            }
+        }
+
+        for (HistoryAction action : trash) {
+            buffer.remove(action);
+        }
+    }
+
     @Override
     public CRUDResult broadcast(HistoryAction action) throws RemoteException {
 
         try {
             //FIRST Check causality
-            if (isLower(action)) {
-                logger.info("received new history causally consistent");
-            }
-            else
-            {
-                logger.info("received a new history which is NOT causally consistent");
+            if (!isLower(action)) {
 
-                /*
-                * Causality.debug(action.getCausality(), causality);
-                */
+                logger.info("received a new history action which is NOT causally consistent");
+
+
+                Causality.debug(action.getCausality(), causality);
+
+                buffer.add(action);
+                return CRUDResult.UNKNOWN;
             }
 
             //Local apply
@@ -195,7 +289,22 @@ public class ServerEndpoint extends UnicastRemoteObject implements BroadcastEndp
             }
             else
             {
+                // Add to history and review buffer for unlocked messages
                 history.add(action);
+
+                logger.info("Causality before");
+                Causality.debug(action.getCausality(), causality);
+
+                //Just in case we're not the author of the history, update causality
+                if (!action.getAuthor().equals(getGUID())) {
+                    causality.incrementFrom(action);
+                }
+
+                logger.info("Causality after");
+                Causality.debug(action.getCausality(), causality);
+
+                //Review the buffer
+                reviewBuffer();
             }
 
             //broadcast
@@ -206,14 +315,6 @@ public class ServerEndpoint extends UnicastRemoteObject implements BroadcastEndp
                 Thread t = new Thread(bcast);
                 t.start();
                 threads.add(t);
-            }
-
-            for (Thread t : threads) {
-                try {
-                    t.join();
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
             }
 
             return isOk;

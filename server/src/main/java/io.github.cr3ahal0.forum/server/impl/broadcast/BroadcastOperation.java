@@ -34,7 +34,7 @@ public class BroadcastOperation implements Runnable {
                 System.out.println("Attempt to notify server " + remoteServer.getParent().getUrl() + ":" + remoteServer.getParent().getPort() +" ...");
                 end = remoteServer.broadcast(action);
 
-                if (end.equals(CRUDResult.OK)) {
+                if (end.equals(CRUDResult.OK) || end.equals(CRUDResult.UNKNOWN)) {
                     System.out.println("Server " + remoteServer.getParent().getUrl() + ":" + remoteServer.getParent().getPort() + " has been notified correctly");
                 }
                 else if (end.equals(CRUDResult.KO)) {

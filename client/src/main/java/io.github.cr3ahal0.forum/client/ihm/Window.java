@@ -46,6 +46,8 @@ public class Window extends Application {
 
 	private Stage m_primaryStage;
 	private ClientForum m_clientForumParent;
+    private List<ISujetDiscussion> subjects;
+    private Map<String, ISujetDiscussion> topics;
 
 	/* Zone Channel */
 	private TabPane m_tabPane;
@@ -56,9 +58,12 @@ public class Window extends Application {
 	private GridPane m_toolZone;
 	private ListView<String> m_listOfChannel;
 	private Button addBtn;
-	
+    private Button deleteBtn;
+
 	public Window(ClientForum parent){
 		m_clientForumParent = parent;
+        subjects = new ArrayList<ISujetDiscussion>();
+        topics = new HashMap<String, ISujetDiscussion>();
 	}
 
 	public void createForum(){
@@ -109,7 +114,16 @@ public class Window extends Application {
 		            else{
 		            	addBtn.setText("S'abonner");
 		            }
-	        	}
+
+                    deleteBtn.setVisible(false);
+                    try {
+                        if (topics.get(nameOfChannel).getOwner().equals(m_clientForumParent.getLogin())) {
+                            deleteBtn.setVisible(true);
+                        }
+                    } catch (RemoteException e) {
+                        e.printStackTrace();
+                    }
+                }
 
 	        }
 	    });
@@ -141,6 +155,17 @@ public class Window extends Application {
 		//Hide button on start
 		addBtn.setVisible(false);	
 
+        deleteBtn = new Button("Suppr.");
+        deleteBtn.setPrefWidth(200);
+        deleteBtn.setOnAction(new EventHandler<ActionEvent>() {
+            @Override
+            public void handle(ActionEvent event) {
+                String nameOfChannel = m_listOfChannel.getSelectionModel().getSelectedItem();
+                m_clientForumParent.operationOnChannelWithName(nameOfChannel,"delete");
+            }
+        });
+        deleteBtn.setVisible(false);
+
 		/* Main Panel */
 		m_toolZone = new GridPane();
 		Pane blank1 = new Pane();
@@ -149,6 +174,7 @@ public class Window extends Application {
 		m_toolZone.add(blank2,1,1);		
 		m_toolZone.add(m_listOfChannel,1,2);
 		m_toolZone.add(addBtn,1,3);
+        m_toolZone.add(deleteBtn, 1, 4);
 
 		m_toolZone.setHgap(50);
 		m_toolZone.setVgap(20);
@@ -175,11 +201,14 @@ public class Window extends Application {
             for (String key : keys) {
                 try {
                     list[i++] = topics.get(key).getTitle();
+                    this.topics.put(topics.get(key).getTitle(),  topics.get(key));
                 } catch (RemoteException e) {
                     e.printStackTrace();
                 }
             }
         }
+
+        subjects = new ArrayList<ISujetDiscussion>(topics.values());
 
         final String[] copyList = list;
         Platform.runLater(new Runnable() {

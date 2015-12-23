@@ -7,4 +7,5 @@ public enum CRUDResult {
     OK,
     KO,
     ERROR,
+    UNKNOWN,
 }

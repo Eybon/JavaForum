@@ -449,6 +449,7 @@ public class ServeurForum
             action.setContent(ContentKind.TOPIC);
             action.setClassifier(SujetDiscussion.class);
             action.setData(sw.toString());
+            action.setDate(LocalDateTime.now());
 
             //Increment self
             Causality causality = endpoint.getCausality();
@@ -519,6 +520,7 @@ public class ServeurForum
             action.setContent(ContentKind.MESSAGE);
             action.setClassifier(Message.class);
             action.setData(sw.toString());
+            action.setDate(date);
 
             //Increment self
             Causality causality = endpoint.getCausality();

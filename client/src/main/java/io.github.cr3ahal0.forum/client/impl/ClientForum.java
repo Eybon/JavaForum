@@ -48,6 +48,10 @@ public class ClientForum extends UnicastRemoteObject implements IClientForum, Ob
 
     private Stage m_primaryStage;
 
+    public String getLogin() {
+        return login;
+    }
+
     public ClientForum(Stage primaryStage, String serverUrl, String serverPort) throws RemoteException {
 
         try {
