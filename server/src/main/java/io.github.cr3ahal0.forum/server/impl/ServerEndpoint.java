@@ -114,6 +114,7 @@ public class ServerEndpoint extends UnicastRemoteObject implements BroadcastEndp
         return history;
     }
 
+    @Override
     /**
      * Add a server to the list of known servers.
      * @param url the complete url (containing port if required) of the given server
@@ -190,7 +191,8 @@ public class ServerEndpoint extends UnicastRemoteObject implements BroadcastEndp
         return causality;
     }
 
-    public boolean isLower(HistoryAction action) {
+    @Override
+    public boolean isLower(HistoryAction action) throws RemoteException {
         boolean isLower = true;
 
         Causality c = action.getCausality();
@@ -236,6 +238,7 @@ public class ServerEndpoint extends UnicastRemoteObject implements BroadcastEndp
         return rand.nextInt((max - min) + 1) + min;
     }
 
+    @Override
     synchronized public void reviewBuffer() throws UnknownContentKindException, RemoteException {
         List<HistoryAction> trash = new ArrayList<HistoryAction>();
 
@@ -262,6 +265,8 @@ public class ServerEndpoint extends UnicastRemoteObject implements BroadcastEndp
     @Override
     public CRUDResult broadcast(HistoryAction action) throws RemoteException {
 
+        CRUDResult isOk = CRUDResult.UNKNOWN;
+
         try {
             //FIRST Check causality
             if (!isLower(action)) {
@@ -272,39 +277,36 @@ public class ServerEndpoint extends UnicastRemoteObject implements BroadcastEndp
                 Causality.debug(action.getCausality(), causality);
 
                 buffer.add(action);
-                return CRUDResult.UNKNOWN;
             }
+            else {
+                //Local apply
+                logger.info("[" + this.parent.getUrl() + ":" + this.parent.getPort() + "]Local handling of a new history");
+                isOk = handleHistory(action);
 
-            //Local apply
-            logger.info("[" + this.parent.getUrl() + ":" + this.parent.getPort() + "]Local handling of a new history");
-            CRUDResult isOk = handleHistory(action);
+                if (isOk.equals(CRUDResult.KO)) {
+                    logger.info("[" + this.parent.getUrl() + ":" + this.parent.getPort() + "] Already known history");
+                    return isOk;
+                } else if (isOk.equals(CRUDResult.ERROR)) {
+                    logger.info("[" + this.parent.getUrl() + ":" + this.parent.getPort() + "] An error occured while handling history");
+                    return isOk;
+                } else {
+                    // Add to history and review buffer for unlocked messages
+                    history.add(action);
 
-            if (isOk.equals(CRUDResult.KO)) {
-                logger.info("[" + this.parent.getUrl() + ":" + this.parent.getPort() + "] Already known history");
-                return isOk;
-            }
-            else if (isOk.equals(CRUDResult.ERROR)){
-                logger.info("[" + this.parent.getUrl() + ":" + this.parent.getPort() + "] An error occured while handling history");
-                return isOk;
-            }
-            else
-            {
-                // Add to history and review buffer for unlocked messages
-                history.add(action);
+                    logger.info("Causality before");
+                    Causality.debug(action.getCausality(), causality);
 
-                logger.info("Causality before");
-                Causality.debug(action.getCausality(), causality);
+                    //Just in case we're not the author of the history, update causality
+                    if (!action.getAuthor().equals(getGUID())) {
+                        causality.incrementFrom(action);
+                    }
 
-                //Just in case we're not the author of the history, update causality
-                if (!action.getAuthor().equals(getGUID())) {
-                    causality.incrementFrom(action);
+                    logger.info("Causality after");
+                    Causality.debug(action.getCausality(), causality);
+
+                    //Review the buffer
+                    reviewBuffer();
                 }
-
-                logger.info("Causality after");
-                Causality.debug(action.getCausality(), causality);
-
-                //Review the buffer
-                reviewBuffer();
             }
 
             //broadcast
